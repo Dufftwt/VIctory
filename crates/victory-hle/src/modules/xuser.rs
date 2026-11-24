@@ -323,6 +323,25 @@ mod tests {
     use crate::modules::xgameruntime::method as slot;
 
     #[test]
+    fn a_gamertag_without_a_suffix_has_an_empty_modern_suffix() {
+        type Gamertag =
+            extern "system" fn(This, Handle, u32, usize, *mut u8, *mut usize) -> HRESULT;
+        let this: This = &OBJECT;
+        let user = std::ptr::null();
+        // Classic, modern, modern suffix, unique modern; through both slots.
+        let expected: [&[u8]; 4] = [b"Player\0", b"Player\0", b"\0", b"Player\0"];
+        for (object, at) in [(&GAMERTAG_OBJECT, 0x18), (&OBJECT, 0x78)] {
+            let get = slot::<Gamertag>(object, at);
+            for (component, expected) in (0..).zip(expected) {
+                let (mut name, mut used) = ([0xff_u8; 16], 0);
+                let hr = get(this, user, component, 16, name.as_mut_ptr(), &mut used);
+                assert_eq!(hr, S_OK);
+                assert_eq!(&name[..used], expected, "component {component}");
+            }
+        }
+    }
+
+    #[test]
     fn startup_adds_the_user_and_reads_its_id() {
         type Add = extern "system" fn(This, u32, *mut AsyncBlock) -> HRESULT;
         type AddResult = extern "system" fn(This, *mut AsyncBlock, *mut Handle) -> HRESULT;
