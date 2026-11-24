@@ -496,6 +496,12 @@ impl<'a> Lower<'a> {
             }
             let inst = &p.blocks[d.site.0].insts[d.site.1];
             let name = inst.name();
+            // Per #724/#725, treat `store`, `atomic`, and `glc` loads (excluding
+            // `image_sample*` and descriptor loads `s_load_dword*`) as evidence
+            // that a resource-heap descriptor is a UAV, so cross-workgroup `glc`
+            // spin-waits receive `IsUAV | IsGloballyCoherent`.
+            // shortcut: if a shader ever issues `glc` on a read-only heap SRV,
+            // annotating it as a UAV mismatches the heap descriptor type.
             let implies_uav = match &inst.fields {
                 Fields::Buffer { cache, .. } => {
                     name.contains("store") || name.contains("atomic") || cache.glc
