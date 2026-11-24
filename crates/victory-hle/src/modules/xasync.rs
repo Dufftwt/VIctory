@@ -1125,6 +1125,49 @@ mod tests {
     }
 
     #[test]
+    fn a_canceled_pending_call_leaves_the_next_call_alone() {
+        static IDENTITY: u8 = 0;
+        let identity = (&raw const IDENTITY).cast();
+        let mut block = AsyncBlock {
+            queue: std::ptr::null(),
+            context: std::ptr::null_mut(),
+            callback: None,
+            internal: [0; 4],
+        };
+        // Work that runs until it is told to finish (a dialog, say).
+        let gated = |result: Vec<u8>| {
+            let (go, wait) = std::sync::mpsc::channel::<()>();
+            let work = move || {
+                let _ = wait.recv();
+                Ok(result)
+            };
+            (go, work)
+        };
+        let (finish_first, first) = gated(vec![1, 2, 3]);
+        assert_eq!(pending_with(&mut block, identity, first), S_OK);
+        XAsyncCancel(&mut block);
+        assert_eq!(XAsyncGetStatus(&mut block, true), E_ABORT);
+
+        // The title begins its next call on the same block; then the
+        // canceled call's work ends.
+        let (finish_second, second) = gated(vec![9]);
+        assert_eq!(pending_with(&mut block, identity, second), S_OK);
+        finish_first.send(()).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        assert_eq!(XAsyncGetStatus(&mut block, false), E_PENDING);
+
+        finish_second.send(()).unwrap();
+        assert_eq!(XAsyncGetStatus(&mut block, true), S_OK);
+        let (mut out, mut used) = ([0u8; 4], 0);
+        let buffer = out.as_mut_ptr().cast();
+        assert_eq!(
+            XAsyncGetResult(&mut block, identity, 4, buffer, &mut used),
+            S_OK
+        );
+        assert_eq!(&out[..used], [9]);
+    }
+
+    #[test]
     fn run_returns_the_work_result() {
         extern "system" fn work(_: *mut AsyncBlock) -> HRESULT {
             E_ABORT
