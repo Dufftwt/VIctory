@@ -15,6 +15,6 @@ jobs:
       - name: Build
         run: cargo build -p victory-loader --all-targets
       - name: Demo report line
-        run: cargo test -p victory-loader --lib scratch_demo the_host_line -- --nocapture
+        run: cargo test -p victory-loader --lib -- --nocapture scratch_demo the_host_line
       - name: Test
         run: cargo test -p victory-loader --no-fail-fast -- --test-threads=1
