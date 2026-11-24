@@ -848,4 +848,27 @@ mod tests {
             None
         );
     }
+
+    /// Scratch only (CI demo, not part of the PR): prints the report of an
+    /// illegal instruction at `rdpru` bytes.
+    #[test]
+    fn scratch_demo_report_line() {
+        static CODE: [u8; 16] = [
+            0x0f, 0x01, 0xfd, 0x48, 0x89, 0xc1, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90,
+        ];
+        // SAFETY: a synthetic record at our own static bytes.
+        unsafe {
+            let mut record: EXCEPTION_RECORD = std::mem::zeroed();
+            record.ExceptionCode = EXCEPTION_ILLEGAL_INSTRUCTION;
+            record.ExceptionAddress = CODE.as_ptr() as *mut _;
+            let mut context: CONTEXT = std::mem::zeroed();
+            RtlCaptureContext(&mut context);
+            let pointers = EXCEPTION_POINTERS {
+                ExceptionRecord: &mut record,
+                ContextRecord: &mut context,
+            };
+            report("unhandled exception", &pointers, false);
+        }
+    }
 }
