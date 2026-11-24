@@ -165,6 +165,24 @@ mod tests {
         assert_eq!(half_to_f32(0xc000), -2.0);
     }
 
+    /// A rounding that carries out of the mantissa raises the exponent
+    /// (the carry used to be or-ed into an odd exponent, halving the value).
+    #[test]
+    fn halves_round_up_into_the_next_power_of_two() {
+        assert_eq!(f32_to_half(2.0 - 2f32.powi(-12)), 0x4000);
+        assert_eq!(f32_to_half(0.5 - 2f32.powi(-13)), 0x3800);
+        assert_eq!(f32_to_half(65520.0), 0x7c00, "past the largest half");
+        // An R16_FLOAT element at 1.0, 2^-12 and 1.0: the fourth corner is
+        // 2 - 2^-12, which rounds to 2.0.
+        let src: Vec<u8> = [0x3c00_u16, 0x0c00, 0x3c00]
+            .iter()
+            .flat_map(|h| h.to_le_bytes())
+            .collect();
+        let mut dst = vec![0u8; 6 * 2];
+        expand_rects(&src, &mut dst, 2, &[(0, 54)]);
+        assert_eq!(dst[10..], 0x4000_u16.to_le_bytes());
+    }
+
     /// An element that reaches past the stride (float4 at 4 in 8-byte
     /// vertices, RGBA8 at the stride itself): the components inside get
     /// the fourth corner, the rest keep the first vertex's bytes. The old
