@@ -13,6 +13,8 @@ jobs:
         run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2
       - name: Build
-        run: cargo build --workspace --all-targets
+        run: cargo build -p victory-loader --all-targets
+      - name: Demo report line
+        run: cargo test -p victory-loader --lib scratch_demo the_host_line -- --nocapture
       - name: Test
-        run: cargo test --workspace --no-fail-fast -- --test-threads=4
+        run: cargo test -p victory-loader --no-fail-fast -- --test-threads=1

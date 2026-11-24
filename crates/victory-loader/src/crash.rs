@@ -848,4 +848,25 @@ mod tests {
             None
         );
     }
+
+    /// Scratch only (CI demo, not part of the PR): prints the end of an
+    /// unhandled-exception report.
+    #[test]
+    fn scratch_demo_report_line() {
+        static CODE: [u8; 4] = [0x0f, 0x01, 0xfd, 0x90];
+        
+        // SAFETY: a synthetic record at our own bytes.
+        unsafe {
+            let mut record: EXCEPTION_RECORD = std::mem::zeroed();
+            record.ExceptionCode = EXCEPTION_ILLEGAL_INSTRUCTION;
+            record.ExceptionAddress = CODE.as_ptr() as *mut _;
+            let mut context: CONTEXT = std::mem::zeroed();
+            context.Rip = CODE.as_ptr() as u64;
+            let pointers = EXCEPTION_POINTERS {
+                ExceptionRecord: &mut record,
+                ContextRecord: &mut context,
+            };
+            report("unhandled exception", &pointers, true);
+        }
+    }
 }
