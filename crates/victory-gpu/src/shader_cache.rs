@@ -336,6 +336,23 @@ mod tests {
         assert!(cached(&cache, &build, b"other", fail).is_err());
     }
 
+    #[test]
+    fn a_cache_that_cannot_keep_an_entry_still_gives_the_translation() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::open(dir.path()).unwrap();
+        // A file where every entry's folder would go: nothing can be written.
+        for shard in 0..=0xff_u8 {
+            std::fs::write(dir.path().join(format!("{shard:02x}")), b"").unwrap();
+        }
+        let translate = |_: &[u8]| Ok(shader());
+        let container = b"a console container".as_slice();
+        assert_eq!(cached(&cache, &[7; 32], container, translate), Ok(shader()));
+        // A shader that does not translate still fails, with its own error.
+        let fail = |_: &[u8]| Err::<HostShader, _>("unsupported".to_owned());
+        let error = cached(&cache, &[7; 32], b"other", fail).unwrap_err();
+        assert!(error.contains("unsupported"), "{error}");
+    }
+
     fn walk(dir: &std::path::Path) -> Vec<PathBuf> {
         let mut files = Vec::new();
         for e in std::fs::read_dir(dir).unwrap().flatten() {
