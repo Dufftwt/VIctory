@@ -446,6 +446,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_compute_program_with_cache_invalidates_translates() {
+        // v_mov_b32 v1, v0; buffer_gl0_inv; buffer_gl1_inv; s_endpgm
+        let words = [0x7E02_0300u32, 0xE1C4_0000, 0, 0xE1C8_0000, 0, 0xBF81_0000];
+        let native = NativeProgram {
+            stage: HwStage::Cs,
+            wave64: false,
+            vgprs: 2,
+            layout: vec![],
+            used: vec![],
+            io: StageIo::Cs(ComputeIo {
+                rsrc2: 0,
+                threads: [32, 1, 1],
+            }),
+            code: words.iter().flat_map(|w| w.to_le_bytes()).collect(),
+        };
+        let p = ir::build(&native.patched_code(), native.wave64, native.vgprs).unwrap();
+        let res = resource::track(&p, &native.layout, native.stage).unwrap();
+        let io = io::raise(&p, &native).unwrap();
+        let st = structure::structure(&p).unwrap();
+        let container = crate::dxbc::build(&[]);
+        let c = Container::parse(&container).unwrap();
+        emit(&c, &native, &p, &st, &io, &res).unwrap();
+    }
+
     /// A pixel shader writing a constant colour.
     fn constant_color() -> Vec<u8> {
         let mut s = Shader::new(true);

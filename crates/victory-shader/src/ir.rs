@@ -861,6 +861,12 @@ fn effects(
             cache,
             ..
         } => {
+            // `buffer_gl0_inv`/`buffer_gl1_inv` (no data) take no operands:
+            // their zero fields name no registers.
+            if data.is_none() {
+                r.extend(mask(EXEC));
+                return Ok(Some((r, w)));
+            }
             if *offen || *idxen {
                 regs(addr, &mut r)?;
             }

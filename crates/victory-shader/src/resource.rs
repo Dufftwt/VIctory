@@ -126,7 +126,11 @@ pub fn track(p: &Program, layout: &[RootParam], stage: HwStage) -> Result<Resour
                         descriptor(s, Role::Sampler)?;
                     }
                 }
-                Fields::Buffer { rsrc, .. } => descriptor(rsrc, Role::Resource)?,
+                Fields::Buffer {
+                    rsrc,
+                    data: Some(_),
+                    ..
+                } => descriptor(rsrc, Role::Resource)?,
                 Fields::Smem { base, .. } if inst.name().starts_with("s_buffer_") => {
                     descriptor(base, Role::Resource)?;
                 }
@@ -1094,6 +1098,41 @@ mod tests {
         assert!(
             offsets.contains(&0) && offsets.contains(&0x10),
             "{offsets:?}"
+        );
+    }
+
+    #[test]
+    fn cache_invalidates_have_no_descriptor() {
+        // buffer_gl0_inv and buffer_gl1_inv (MUBUF 0x71/0x72) take no
+        // operands: their resource and offset fields are zero, which is not
+        // s[0:3] and s0. Here s[0:3] hold root constants.
+        let r = track_words(
+            &[
+                0xE1C4_0000,
+                0x0000_0000, // buffer_gl0_inv
+                0xE1C8_0000,
+                0x0000_0000, // buffer_gl1_inv
+                S_ENDPGM,
+            ],
+            &[param(Constants, 0, 4)],
+            HwStage::Cs,
+        );
+        assert!(r.descriptors.is_empty(), "{:?}", r.descriptors);
+        let p = crate::ir::build(
+            &[0xE1C4_0000u32, 0, S_ENDPGM]
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .collect::<Vec<u8>>(),
+            false,
+            256,
+        )
+        .unwrap();
+        let inv = &p.blocks[0].insts[0];
+        assert_eq!(inv.name(), "buffer_gl0_inv");
+        assert!(
+            inv.reads.iter().all(|r| r.0 == Reg::S(crate::ir::EXEC)),
+            "{:?}",
+            inv.reads
         );
     }
 
