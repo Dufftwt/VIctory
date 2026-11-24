@@ -869,10 +869,14 @@ extern "system" fn set_pipeline(this: This, pipeline: This) {
 }
 
 /// Pipeline syncs: waits for earlier work and cache flushes, at the top or
-/// bottom of the pipe `(flags, control, address, size)`. Host lists order
-/// their own work and every submission is waited for, so there is nothing
-/// to do.
-extern "system" fn sync(_: This, _flags: u32, _control: u32, _address: u64, _size: u64) {}
+/// bottom of the pipe `(flags, control, address, size)`. Titles order
+/// dependent passes with them instead of barriers. Every submission is
+/// waited for, but within one host list draws and dispatches may overlap
+/// unless a barrier separates them, so a sync waits for every shader write
+/// before it.
+extern "system" fn sync(this: This, _flags: u32, _control: u32, _address: u64, _size: u64) {
+    wait_for_shader_writes(this);
+}
 
 /// Reset with console flags `(allocator, pipeline, flags)`; the flags only
 /// tune the console's command memory.
@@ -1235,10 +1239,15 @@ extern "system" fn wait_value(_: This, _address: u64, _comparison: u32, _referen
 /// first, so only their ordering matters: one barrier on every shader
 /// write (the title's buffer barriers order compute passes).
 extern "system" fn barrier_groups(this: This, count: u32, _groups: *const u8) {
+    if count > 0 {
+        wait_for_shader_writes(this);
+    }
+}
+
+/// Records [`UAV_BARRIER`] in the list's host list, if it has one.
+fn wait_for_shader_writes(this: This) {
     #[cfg(windows)]
-    if count > 0
-        && let Some(list) = host_list(this)
-    {
+    if let Some(list) = host_list(this) {
         use windows::Win32::Graphics::Direct3D12::D3D12_RESOURCE_BARRIER;
         // SAFETY: the same layout; no resource named.
         let barrier = unsafe { std::mem::transmute::<Barrier, D3D12_RESOURCE_BARRIER>(UAV_BARRIER) };
@@ -1246,7 +1255,7 @@ extern "system" fn barrier_groups(this: This, count: u32, _groups: *const u8) {
         unsafe { list.list.ResourceBarrier(&[barrier]) };
     }
     #[cfg(not(windows))]
-    let _ = (this, count);
+    let _ = this;
 }
 
 /// The bottom-of-pipe value writes `(address, value, flush, flags)`, 32 and
