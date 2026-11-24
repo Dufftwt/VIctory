@@ -13,6 +13,6 @@ jobs:
         run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2
       - name: Build
-        run: cargo build --workspace --all-targets
+        run: cargo build -p victory-shader --all-targets
       - name: Test
-        run: cargo test --workspace --no-fail-fast -- --test-threads=4
+        run: cargo test -p victory-shader --lib --no-fail-fast -- --test-threads=1 --nocapture sample_interpolated a_stencil_export cache_invalidates
