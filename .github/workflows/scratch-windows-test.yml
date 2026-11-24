@@ -13,6 +13,7 @@ jobs:
         run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2
       - name: Build
-        run: cargo build --workspace --all-targets
+        run: cargo build -p victory-gpu --all-targets
       - name: Test
-        run: cargo test --workspace --no-fail-fast -- --test-threads=4
+        timeout-minutes: 5
+        run: cargo test -p victory-gpu --lib an_announcement_as_long -- --test-threads=1
