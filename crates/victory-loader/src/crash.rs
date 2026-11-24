@@ -746,6 +746,30 @@ mod tests {
     }
 
     #[test]
+    fn an_escaped_rethrow_is_named() {
+        // `throw;` outside any handler, as MSVC's runtime raises it: the
+        // magic, then no object, type or image.
+        let rethrow = [CPP_MAGIC, 0, 0, 0];
+        // SAFETY: the parameters of a rethrow, which have nothing to read.
+        assert_eq!(unsafe { thrown(&rethrow) }, "rethrow");
+        // And the whole report, which read its type at 0xc before.
+        // SAFETY: a synthetic record; Rsp 0 stops the unwind at once.
+        unsafe {
+            let mut record: EXCEPTION_RECORD = std::mem::zeroed();
+            record.ExceptionCode = CPP_EXCEPTION;
+            record.NumberParameters = 4;
+            record.ExceptionInformation[..4].copy_from_slice(&rethrow);
+            let mut context: CONTEXT = std::mem::zeroed();
+            context.Rip = an_escaped_rethrow_is_named as *const () as u64;
+            let pointers = EXCEPTION_POINTERS {
+                ExceptionRecord: &mut record,
+                ContextRecord: &mut context,
+            };
+            report("unhandled exception", &pointers, false);
+        }
+    }
+
+    #[test]
     fn emulated_clzero_zeroes_its_line() {
         #[repr(align(64))]
         struct Line([u8; 128]);
