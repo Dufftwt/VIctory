@@ -862,8 +862,9 @@ mod tests {
             let mut record: EXCEPTION_RECORD = std::mem::zeroed();
             record.ExceptionCode = EXCEPTION_ILLEGAL_INSTRUCTION;
             record.ExceptionAddress = CODE.as_ptr() as *mut _;
+            // Rip at the bytes, Rsp 0: the unwind stops at the first frame.
             let mut context: CONTEXT = std::mem::zeroed();
-            RtlCaptureContext(&mut context);
+            context.Rip = CODE.as_ptr() as u64;
             let pointers = EXCEPTION_POINTERS {
                 ExceptionRecord: &mut record,
                 ContextRecord: &mut context,
