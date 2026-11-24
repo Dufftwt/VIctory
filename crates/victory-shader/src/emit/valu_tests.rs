@@ -350,6 +350,7 @@ fn legacy_fused_multiply_adds_flush_subnormal_inputs_and_results() {
         ([0, f(3.0), subnormal, 0], 0),
         // A normal product with subnormal exact result is flushed.
         ([f(2.0f32.powi(-63)), f(2.0f32.powi(-64)), 0, 0], 0),
+        ([-2.0f32.powi(-63), 2.0f32.powi(-64), 0.0, 0.0].map(f), f(-0.0)),
         // The normal values adjoining the subnormal range remain intact.
         ([f(f32::MIN_POSITIVE), f(1.0), 0, 0], f(f32::MIN_POSITIVE)),
     ];
