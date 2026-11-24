@@ -411,6 +411,14 @@ mod tests {
         title_memory_remapped(top, usize::MAX);
     }
 
+    /// Scratch: the new test, with this tree's per-block map.
+    #[test]
+    fn an_announcement_as_long_as_the_address_space_is_cheap() {
+        let high = usize::MAX / 2;
+        kernel_will_write(high, usize::MAX);
+        kernel_wrote(high, usize::MAX);
+    }
+
     /// A kernel read announced with `kernel_will_write` survives a refresh
     /// on another thread before it lands; once `kernel_wrote` says it has,
     /// the next refresh guards its block again.
