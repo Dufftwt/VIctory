@@ -385,11 +385,16 @@ const CPP_MAGIC: usize = 0x1993_0520;
 
 /// What a C++ throw threw: the decorated name of its type, then its value
 /// where that names the cause (an integer, e.g. an HRESULT; a standard
-/// exception's message).
+/// exception's message). A rethrow (`throw;`) carries no object, type or
+/// image (the handler that catches it looks up the exception being
+/// handled), so one that escapes is only named as such.
 ///
 /// # Safety
 /// `p` are the parameters of a live MSVC throw (`p[0]` the magic).
 unsafe fn thrown(p: &[usize]) -> String {
+    if p[2] == 0 || p[3] == 0 {
+        return "rethrow".into();
+    }
     // SAFETY: the throw's ThrowInfo, its RVAs relative to `p[3]`: catchable
     // type array at +12 (count, then type RVAs), each type's descriptor at
     // +4, whose decorated name starts at +16; the object is at `p[1]`.
@@ -743,6 +748,30 @@ mod tests {
 
     fn low(xmm: &[M128A; 16], i: usize) -> u64 {
         xmm[i].Low
+    }
+
+    #[test]
+    fn an_escaped_rethrow_is_named() {
+        // `throw;` outside any handler, as MSVC's runtime raises it: the
+        // magic, then no object, type or image.
+        let rethrow = [CPP_MAGIC, 0, 0, 0];
+        // SAFETY: the parameters of a rethrow, which have nothing to read.
+        assert_eq!(unsafe { thrown(&rethrow) }, "rethrow");
+        // And the whole report, which read its type at 0xc before.
+        // SAFETY: a synthetic record; Rsp 0 stops the unwind at once.
+        unsafe {
+            let mut record: EXCEPTION_RECORD = std::mem::zeroed();
+            record.ExceptionCode = CPP_EXCEPTION;
+            record.NumberParameters = 4;
+            record.ExceptionInformation[..4].copy_from_slice(&rethrow);
+            let mut context: CONTEXT = std::mem::zeroed();
+            context.Rip = an_escaped_rethrow_is_named as *const () as u64;
+            let pointers = EXCEPTION_POINTERS {
+                ExceptionRecord: &mut record,
+                ContextRecord: &mut context,
+            };
+            report("unhandled exception", &pointers, false);
+        }
     }
 
     #[test]
