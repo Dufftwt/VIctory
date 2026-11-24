@@ -671,4 +671,34 @@ mod copy_back_tests {
             "the shader's bytes"
         );
     }
+
+    /// Scratch only: copy-back time when shaders changed every `step`th
+    /// byte of 64 pages.
+    #[test]
+    fn scattered_copy_back_timing() {
+        for round in 0..3 {
+            for step in [2usize, 16, 256, 1] {
+                let title = Title::new();
+                let base = title.0;
+                let Some(s) = submitted(base) else {
+                    return;
+                };
+                for p in 0..PAGES {
+                    for i in (0..PAGE).step_by(step) {
+                        // SAFETY: inside the copy.
+                        unsafe { s.data.add(p * PAGE + i).write(1) };
+                    }
+                }
+                let t = std::time::Instant::now();
+                let written = s.copy_back(base, PAGES * PAGE);
+                let took = t.elapsed();
+                let runs = if step == 1 { 1 } else { PAGE / step };
+                eprintln!(
+                    "TIMING round {round} step {step}: {runs} runs/page, {written} bytes, {:.1} ms",
+                    took.as_secs_f64() * 1e3
+                );
+                assert!((0..PAGES * PAGE).step_by(step).all(|a| peek(base + a) == 1));
+            }
+        }
+    }
 }
