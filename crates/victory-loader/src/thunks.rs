@@ -147,3 +147,40 @@ impl ThunkBlock {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// In a child process of the next test: calls an unimplemented import
+    /// that traps, with the crash log where `VICTORY_TRAP_LOG` says.
+    #[test]
+    fn trap_child() {
+        let Some(log) = std::env::var_os("VICTORY_TRAP_LOG") else {
+            return;
+        };
+        crate::log_crashes_to(log.into());
+        let site = Box::leak(Box::new(ImportSite {
+            dll: "probe.dll".into(),
+            symbol: "Missing".into(),
+            policy: UnimplementedPolicy::Trap,
+            calls: AtomicU64::new(0),
+        }));
+        unimplemented_import(site);
+    }
+
+    #[test]
+    fn a_trapped_import_is_in_the_crash_log() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("crashes.log");
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "thunks::tests::trap_child", "--nocapture"])
+            .env("VICTORY_TRAP_LOG", &log)
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "the trap ends the process");
+        let text = std::fs::read_to_string(&log).unwrap_or_default();
+        let named = text.contains("VIctory: unimplemented import probe.dll!Missing called");
+        assert!(named, "crash log: {text:?}");
+    }
+}
