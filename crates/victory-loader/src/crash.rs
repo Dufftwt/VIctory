@@ -925,4 +925,33 @@ mod tests {
             None
         );
     }
+
+    /// Scratch only (CI demo, not part of the PR): prints the reports of
+    /// writes to reserved memory, a guard page and a null pointer.
+    #[test]
+    fn scratch_demo_report_line() {
+        use windows_sys::Win32::System::Memory::{
+            MEM_COMMIT, MEM_RESERVE, PAGE_GUARD, PAGE_NOACCESS, PAGE_READWRITE, VirtualAlloc,
+        };
+        // SAFETY: synthetic records; the reservation is ours and never touched.
+        unsafe {
+            let base = VirtualAlloc(std::ptr::null(), 0x2000, MEM_RESERVE, PAGE_NOACCESS) as usize;
+            VirtualAlloc((base + 0x1000) as *const _, 0x1000, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
+            for target in [base + 0x570, base + 0x1010, 0x18, usize::MAX] {
+                let mut record: EXCEPTION_RECORD = std::mem::zeroed();
+                record.ExceptionCode = EXCEPTION_ACCESS_VIOLATION;
+                record.ExceptionAddress = scratch_demo_report_line as *const () as *mut _;
+                record.NumberParameters = 2;
+                record.ExceptionInformation[0] = 1;
+                record.ExceptionInformation[1] = target;
+                let mut context: CONTEXT = std::mem::zeroed();
+                context.Rip = record.ExceptionAddress as u64;
+                let pointers = EXCEPTION_POINTERS {
+                    ExceptionRecord: &mut record,
+                    ContextRecord: &mut context,
+                };
+                report("unhandled exception", &pointers, false);
+            }
+        }
+    }
 }
