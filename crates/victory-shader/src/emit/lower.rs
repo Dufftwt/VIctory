@@ -1485,10 +1485,28 @@ impl<'a> Lower<'a> {
         self.s.m.select(c, z, zero, m)
     }
 
-    /// `a × b + addend` fused, with `0 × anything = 0` as in D3D9
-    /// (`v_fma_legacy_f32`).
+    /// Flush f32 subnormals to signed zero independently of the host's
+    /// floating-point mode. Signed zeros already have the desired bits.
+    fn flush_f32_subnormal(&mut self, value: V) -> V {
+        let c = self.cur;
+        let bits = self.as_int(value);
+        let exponent_mask = self.s.m.i32(0x7f80_0000);
+        let exponent = self.s.m.bin(c, Bin::And, bits, exponent_mask);
+        let zero = self.s.m.i32(0);
+        let zero_exponent = self.s.m.cmp(c, pred::EQ, exponent, zero);
+        let sign_mask = self.s.m.i32(0x8000_0000);
+        let sign = self.s.m.bin(c, Bin::And, bits, sign_mask);
+        let flushed = self.s.m.select(c, zero_exponent, sign, bits);
+        self.as_float(flushed)
+    }
+
+    /// `a × b + addend` fused, with `0 × anything = 0` as in D3D9.
+    /// Both RDNA2 legacy fused opcodes flush subnormal inputs and results.
     fn fma_legacy(&mut self, a: V, b: V, addend: V) -> V {
         let c = self.cur;
+        let a = self.flush_f32_subnormal(a);
+        let b = self.flush_f32_subnormal(b);
+        let addend = self.flush_f32_subnormal(addend);
         let zero = self.s.m.f32(0);
         let az = self.s.m.cmp(c, pred::OEQ, a, zero);
         let bz = self.s.m.cmp(c, pred::OEQ, b, zero);
@@ -1496,7 +1514,8 @@ impl<'a> Lower<'a> {
         let product_zero = self.s.m.bin(c, Bin::Add, zero, addend);
         // shortcut: FMad lets the driver fuse, as for `v_fma_f32`.
         let fused = self.fmad(a, b, addend);
-        self.s.m.select(c, z, product_zero, fused)
+        let value = self.s.m.select(c, z, product_zero, fused);
+        self.flush_f32_subnormal(value)
     }
 
     // ---- lane booleans ----

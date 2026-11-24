@@ -339,6 +339,43 @@ fn v_fma_legacy_f32_follows_the_d3d9_zero_rule() {
 }
 
 #[test]
+fn legacy_fused_multiply_adds_flush_subnormal_inputs_and_results() {
+    let f = f32::to_bits;
+    let subnormal = 0x0000_0100;
+    let cases = [
+        // A subnormal factor flushed to zero must take the legacy zero path.
+        ([subnormal, f(f32::INFINITY), f(2.0), 0], f(2.0)),
+        ([f(f32::INFINITY), subnormal, f(2.0), 0], f(2.0)),
+        // A subnormal addend must also be flushed on the zero-factor path.
+        ([0, f(3.0), subnormal, 0], 0),
+        // A normal product with subnormal exact result is flushed.
+        ([f(2.0f32.powi(-63)), f(2.0f32.powi(-64)), 0, 0], 0),
+        ([-2.0f32.powi(-63), 2.0f32.powi(-64), 0.0, 0.0].map(f), f(-0.0)),
+        // The normal values adjoining the subnormal range remain intact.
+        ([f(f32::MIN_POSITIVE), f(1.0), 0, 0], f(f32::MIN_POSITIVE)),
+    ];
+
+    let inputs: Vec<_> = cases.iter().map(|&(input, _)| input).collect();
+    let fma = vop3(0x140, 0, vgpr(1), vgpr(2), vgpr(3));
+    // VOP2 FMAC reads its addend from the destination register.
+    let copy_addend = vop1(0x001, 0, vgpr(3));
+    let fmac = [copy_addend, 0x0c00_0501]; // v_fmac_legacy_f32_e32 v0, v1, v2
+    for (name, body) in [
+        ("v_fma_legacy_f32", fma.as_slice()),
+        ("v_fmac_legacy_f32", fmac.as_slice()),
+    ] {
+        let shader = build_valu_cs(body);
+        run_cases(&shader, &inputs, |backend, i, _, got| {
+            let want = cases[i].1;
+            assert_eq!(
+                got, want,
+                "{backend}: {name} case {i}: {got:#x}, want {want:#x}"
+            );
+        });
+    }
+}
+
+#[test]
 fn v_fract_f32_never_returns_one() {
     // v_fract_f32 v0, v1 (VOP1 opcode 0x020)
     let shader = build_valu_cs(&[vop1(0x020, 0, vgpr(1))]);
