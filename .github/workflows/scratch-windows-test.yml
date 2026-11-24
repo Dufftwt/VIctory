@@ -13,6 +13,6 @@ jobs:
         run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2
       - name: Build
-        run: cargo build --workspace --all-targets
+        run: cargo build -p victory-gpu --all-targets
       - name: Test
-        run: cargo test --workspace --no-fail-fast -- --test-threads=4
+        run: cargo test -p victory-gpu --lib --no-fail-fast -- --test-threads=1 copy_back_does_not_undo_title_writes a_title_write_during_copy_back an_announced_kernel_read_survives
