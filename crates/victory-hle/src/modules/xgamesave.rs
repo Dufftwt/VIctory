@@ -1109,6 +1109,42 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_create_leaves_a_null_handle() {
+        let this: This = &OBJECT;
+        let saves = tempfile::tempdir().unwrap();
+        let provider = give(Provider::open(saves.path(), Some("scid")).unwrap());
+        // What an uninitialized handle variable may hold.
+        fn garbage<T>() -> *mut T {
+            std::ptr::without_provenance_mut(0x1234)
+        }
+
+        let mut container = garbage();
+        let bad = c"bad name".as_ptr();
+        let hr = create_container(this, provider, bad, &mut container);
+        assert_eq!(hr, INVALID_CONTAINER_NAME);
+        assert!(container.is_null());
+
+        let mut update = garbage();
+        let hr = create_update(this, std::ptr::null(), c"x".as_ptr(), &mut update);
+        assert_eq!(hr, E_INVALIDARG);
+        assert!(update.is_null());
+
+        // A provider that could not be opened (its folder could not be made).
+        let mut b = block();
+        xasync::finished_with(&mut b, (&raw const INIT).cast(), Err(NO_ACCESS));
+        let mut opened = garbage();
+        let hr = initialize_result(this, &mut b, &mut opened);
+        assert_eq!(hr, NO_ACCESS);
+        assert!(opened.is_null());
+
+        // So closing what the title holds, as it does, is harmless.
+        close_container(this, container);
+        close_update(this, update);
+        close_provider(this, opened);
+        close_provider(this, provider);
+    }
+
+    #[test]
     fn saves_persist_across_providers() {
         let this: This = &OBJECT;
         let saves = tempfile::tempdir().unwrap();
