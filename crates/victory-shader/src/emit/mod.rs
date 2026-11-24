@@ -495,6 +495,10 @@ mod tests {
         let io = io::raise(&p, &native).unwrap();
         let st = structure::structure(&p).unwrap();
         let out = emit(&c, &native, &p, &st, &io, &res).unwrap();
+        if let Ok(mut v) = super::validator::Validator::load(super::validator::Validator::default_path().as_deref()) {
+            let mut copy = out.dxil.clone();
+            eprintln!("SCRATCH stencil validation: {:?}", v.validate(&mut copy).map(|_| "ok"));
+        } else { eprintln!("SCRATCH no validator"); }
         let host = Container::parse(&out.dxil).unwrap();
         let sfi0 = host.part(FourCC::SFI0).unwrap().data;
         let features = u64::from_le_bytes(sfi0.try_into().unwrap());
@@ -654,6 +658,10 @@ mod tests {
             let io = crate::io::raise(&p, &native).unwrap();
             let st = crate::structure::structure(&p).unwrap();
             let out = super::emit(&c, &native, &p, &st, &io, &res).unwrap();
+            if let Ok(mut v) = super::validator::Validator::load(super::validator::Validator::default_path().as_deref()) {
+                let mut copy = out.dxil.clone();
+                eprintln!("SCRATCH psv {input_addr} validation: {:?}", v.validate(&mut copy).map(|_| "ok"));
+            } else { eprintln!("SCRATCH no validator"); }
             let host = super::Container::parse(&out.dxil).unwrap();
             host.part(super::FourCC::PSV0).unwrap().data.to_vec()
         };
